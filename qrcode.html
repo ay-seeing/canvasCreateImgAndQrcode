@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>qrcode</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <script src="http://js.sohu.com/library/jquery-1.7.1.min.js"></script>
+    <script src="./qrcode.js"></script>
+    <style>
+    
+    *{margin:0;padding:0;} 
+    .qrcodeimg{display:none !important;}   
+    /*#createImg{background:#ccc;padding:10px;}*/
+
+    </style>
+</head>
+<body>
+    <div id="qrcode" class="qrcode">
+    </div>
+
+    <div id="createImg"></div>
+
+<script>
+CanvasRenderingContext2D.prototype.wrapText = function (text, x, y, maxWidth,lineNumber, lineHeight) {
+    if (typeof text != 'string' || typeof x != 'number' || typeof y != 'number') {
+        return;
+    }
+    
+    var context = this;
+    var canvas = context.canvas;
+    
+    if (typeof maxWidth == 'undefined') {
+        maxWidth = (canvas && canvas.width) || 300;
+    }
+    if (typeof lineHeight == 'undefined') {
+        lineHeight = (canvas && parseInt(window.getComputedStyle(canvas).lineHeight)) || parseInt(window.getComputedStyle(document.body).lineHeight);
+    }
+    
+    // 字符分隔为数组
+    var arrText = text.split('');
+    var line = '';
+    var lineNum = 0;
+    
+    for (var n = 0; n < arrText.length; n++) {
+        var testLine = line + arrText[n];
+        var metrics = context.measureText(testLine);
+        var testWidth = metrics.width;
+
+        if(lineNumber && lineNum>=lineNumber){
+            return false;        
+        }
+
+        if (testWidth > maxWidth && n > 0) {
+            context.fillText(line, x, y);
+            line = arrText[n];
+            lineNum++
+            y += lineHeight;
+        } else {
+            line = testLine;
+        }
+    }
+    context.fillText(line, x, y);
+};
+
+
+
+
+function QrcodeImage(opt){
+    opt = opt || {}
+    this.can = document.createElement('canvas');
+    this.mainCtx = this.can.getContext('2d')
+    
+    // document.body.appendChild(this.can)
+
+    this.qrimg = document.createElement('img');
+    document.querySelector('#createImg').appendChild(this.qrimg)
+
+}
+// QrcodeImage.prototype.init = function(){
+    
+// }
+QrcodeImage.prototype.creatQrcode = function(opt){
+    var qrcode = new QRCode('qrcode', {
+        render: 'canvas',
+        width : 100,
+        height : 100,
+        colorDark: '#123',
+        src: 'http://0d077ef9e74d8.cdn.sohucs.com/pPSHyhj_jpg'
+    });
+
+    var arg = {
+        fn: opt.fn
+    }
+
+    qrcode.makeCode(opt.url, arg);
+    // console.log(qrcode._oDrawing._elImage)
+}
+// QrcodeImage.prototype.tailorImg = function(x, y, w, h, r) {
+//     // beginPath 与 closePath来关闭绘制圆，以免影响后续绘制，
+//     // 因为不关闭绘制，会导致后续图片全部倍遮挡
+//     mainCtx.save()
+//     mainCtx.beginPath()
+//     mainCtx.moveTo(x + r, y)
+//     mainCtx.arcTo(x + w, y, x + w, y + h, r)
+//     mainCtx.arcTo(x + w, y + h, x, y + h, r)
+//     mainCtx.arcTo(x, y + h, x, y, r)
+//     mainCtx.arcTo(x, y, x + w, y, r)
+//     mainCtx.clip()
+//     mainCtx.closePath()
+// }
+
+QrcodeImage.prototype.render = function(opt, fn){
+    var that = this;
+    opt = opt || {}
+
+    // 设置canvas宽高
+    this.can.width = opt.w || window.innerWidth;
+    this.can.height = opt.h || window.innerHeight;
+
+    console.log(window.innerWidth, opt.w)
+
+    opt.p = opt.p || 10
+
+    if(!opt.parts){
+        that.creatQrcode({
+            url: opt.url,
+            fn: function(img){
+                img.onload = function(){
+                    toQrcodeImage.qrimg.src = img.src
+                    return img;
+                }
+            }
+        })
+    }else{
+        var mainCtx = that.mainCtx;
+        var can = that.can
+        
+        // var imgAndQr = [];
+        that.imgLoadNum = opt.parts.length;
+
+        opt.parts.forEach(function(item, i){
+            item.x += opt.p;
+            item.y += opt.p;
+
+            if(item.type=='image'){
+                if(item.x+item.w>can.width){
+                    item.w = can.width - item.x;
+                    item.h = Math.floor(item.w*3/4)
+                }
+                // if(item.y+item.h>can.height){
+                //     item.h = can.height - item.y
+                // }
+                var img = document.createElement('img');
+                img.src = item.url;
+
+                // canvas上使用了外链图片，也就是跨域了，所以我们需要在img上加上一个crossOrigin属性
+                // 切记base64 的图片画到canvas上别加 crossOrigin 属性，
+                img.setAttribute('crossOrigin', 'anonymous');
+
+                // imgAndQr.push(img);
+
+                // 画个框做背景，先设置颜色然后话
+                mainCtx.fillStyle = opt.background || "#fff";
+                mainCtx.fillRect(0, 0, can.width, can.height);
+                // console.log('img', img)
+                img.onload = function(){
+                    // mainCtx.fill()
+                    mainCtx.drawImage(img, item.x, item.y, item.w, item.h);
+                    mainCtx.restore();
+
+                    fn && fn()
+                }
+                // that.mainCtx.drawImage('https://avatars3.githubusercontent.com/u/18632641?s=40&v=4', 0, 0, 50, 50);
+                // that.mainCtx.restore();
+            }else if(item.type=='text'){
+                if(item.x+item.maxWidth>can.width){
+                    item.maxWidth = can.width - item.x;
+                }
+
+                mainCtx.fillStyle = item.color || '#333';
+                mainCtx.font =  item.font || '14px Arial';
+                mainCtx.textBaseline = 'top';
+                lineH = item.lineH || 20
+                mainCtx.wrapText(item.text, item.x, item.y, item.maxWidth,item.lineNum, lineH);
+                mainCtx.restore();
+                fn && fn()
+            }else{
+                if(item.x+item.w>can.width){
+                    item.x = can.width - item.w;
+                }
+                if(item.y+item.h>can.height){
+                    item.y = can.height - item.h;
+                }
+                // 生成二维码，并将返回图片
+                that.creatQrcode({
+                    url: item.url,
+                    fn: function(img){
+                        
+                        // 二维码图片加载成功后插入canvas
+                        img.onload = function(){
+                            mainCtx.drawImage(img, item.x, item.y, item.w, item.h);
+                            mainCtx.restore();
+
+                            var logoimg = document.createElement('img');
+                            var logo = item.logo;
+                            logoimg.src = logo.url;
+                            logoimg.onload = function(){
+                                
+                                mainCtx.drawImage(logoimg, item.x+(item.w-logo.w)/2, item.y+(item.h-logo.h)/2, logo.w, logo.h);
+                                mainCtx.restore();
+                                fn && fn()
+                                
+                            }
+                        }
+                    }
+                })
+            }
+        })
+    }
+    
+}
+
+QrcodeImage.prototype.saveFile = function(data, filename){
+    var save_link = document.createElementNS('http://www.w3.org/1999/xhtml', 'a');
+    save_link.href = data;
+    save_link.download = filename;
+   
+    var event = document.createEvent('MouseEvents');
+    event.initMouseEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+    save_link.dispatchEvent(event);
+}
+
+
+
+
+
+var toQrcodeImage = new QrcodeImage("#createImg")
+setTimeout(function(){
+    toQrcodeImage.render(
+        {
+            url: '232342', 
+            w: window.innerWidth-20,
+            h: window.innerHeight-100,
+            background: '#fff',
+            padding:10,
+            parts: [
+                {
+                    type: 'image',
+                    url: 'https://img01.yit.com/media/0f88d5f3-f710-462f-abab-03066e5f2182.jpg',
+                    x: 0,
+                    y: 0,
+                    w: window.innerWidth-20,
+                    h: Math.floor((window.innerWidth-20)*3/4)
+                },
+                {
+                    type: 'text',
+                    text: '24532453452345322452345234523452345234324523452345344543',
+                    x: 0,
+                    y: Math.floor((window.innerWidth-20)*3/4)+20,
+                    maxWidth: 110,
+                    lineNum: 2
+                },
+                {
+                    type: 'text',
+                    text: '日销价：',
+                    x: 0,
+                    y: Math.floor((window.innerWidth-20)*3/4)+70,
+                    font: '16px Arial',
+                    lineH: 24
+                },
+                {
+                    type: 'text',
+                    text: '￥234',
+                    x: 70,
+                    y: Math.floor((window.innerWidth-20)*3/4)+70,
+                    maxWidth: 50,
+                    color: 'red',
+                    font: '16px Arial',
+                    lineH: 24
+                },
+                {
+                    type: 'qrcode',
+                    url: '89678976847645675',
+                    logo: {
+                        url: './b1.png',
+                        w: 20,
+                        h: 20
+                    },
+                    x: window.innerWidth-20-80,
+                    y: Math.floor((window.innerWidth-20)*3/4)+80,
+                    w: 80,
+                    h: 80
+                }
+            ]
+        },
+        function(){
+           
+            var filename = 'baidufe_' + (new Date()).getTime() + '.' + 'jpg';
+            // console.log('img', img)
+            toQrcodeImage.imgLoadNum--;
+            if(toQrcodeImage.imgLoadNum==0){
+                var result = toQrcodeImage.can.toDataURL('image/jpg', .8)
+                toQrcodeImage.qrimg.src = result
+
+                var btn = document.createElement('div');
+                btn.innerHTML = '下载';
+                document.body.appendChild(btn)
+
+                btn.addEventListener('click', function(){
+                    result = result.replace('image/jpg','image/octet-stream')
+                    toQrcodeImage.saveFile(result, '34')
+                    // window.location.href = result;
+                })
+            }
+            
+
+        }
+    )
+}, 50)
+
+
+</script>
+</body>
+</html>
